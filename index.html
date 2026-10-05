@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>COVID Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<h2>COVID Dashboard - Due Today</h2>
+<select id="country"></select> <span id="s"></span>
+<canvas id="c"></canvas>
+<script>
+fetch('covid-19.json').then(r=>r.json()).then(j=>{
+console.log('Loaded',j);
+console.log('Countries',j.countries.map(x=>x.country));
+j.countries.forEach(c=>console.log(c.country,c.data[0]));
+document.getElementById('s').innerText='Loaded '+j.countries.length;
+let sel=document.getElementById('country');
+sel.innerHTML=j.countries.map(c=>`<option>${c.country}</option>`).join('');
+function draw(){
+let n=sel.value;let cc=j.countries.find(x=>x.country==n);
+new Chart(document.getElementById('c'),{type:'line',data:{labels:cc.data.map(d=>d.date),[STRIPPED] Confirmed',data:cc.data.map(d=>d.confirmed)}]}})
+}
+sel.onchange=draw;draw();
+})
+</script>
+</body>
+</html>
