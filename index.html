@@ -4,40 +4,80 @@
 <meta charset="UTF-8">
 <title>COVID Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+ body{font-family:Arial; padding:20px; background:#f5f5f5}
+ .cards{display:flex; gap:10px; flex-wrap:wrap; margin:15px 0}
+ .card{background:white; padding:15px; border-radius:8px; flex:1; min-width:120px; box-shadow:0 2px 5px rgba(0,0,0,0.1)}
+ .card h3{margin:0; font-size:14px; color:#666}
+ .card p{margin:5px 0 0; font-size:20px; font-weight:bold}
+ canvas{background:white; border-radius:8px; padding:10px}
+</style>
 </head>
 <body>
-<h2>COVID Dashboard - Due Today</h2>
+<h2>COVID Dashboard - All Charts & Metrics</h2>
 <select id="country"></select> <span id="s"></span>
+
+<div class="cards">
+ <div class="card"><h3>Total Confirmed</h3><p id="m1">-</p></div>
+ <div class="card"><h3>Total Deaths</h3><p id="m2">-</p></div>
+ <div class="card"><h3>Total Recovered</h3><p id="m3">-</p></div>
+ <div class="card"><h3>Latest Date</h3><p id="m4">-</p></div>
+</div>
+
 <canvas id="c"></canvas>
+
 <script>
 let chartObj = null;
+let allData = null;
+
 fetch('covid-19.json').then(r=>r.json()).then(j=>{
-  console.log('Loaded', j);
-  document.getElementById('s').innerText = 'Loaded '+j.countries.length+' countries';
-  let sel = document.getElementById('country');
-  sel.innerHTML = j.countries.map(c=>`<option>${c.country}</option>`).join('');
-  
-  function draw(){
-    let n = sel.value;
-    let cc = j.countries.find(x=>x.country==n);
-    if(chartObj) chartObj.destroy();
-    chartObj = new Chart(document.getElementById('c'), {
-      type: 'line',
-      data: {
-        labels: cc.data.map(d=>d.date),
-        datasets: [{
-          label: 'Confirmed Cases - '+n,
-          data: cc.data.map(d=>d.confirmed),
-          borderColor: 'blue',
-          borderWidth: 2,
-          fill: false
-        }]
-      }
-    });
-  }
-  sel.onchange = draw;
-  draw();
+ console.log('Loaded', j);
+ allData = j;
+ let countries = j.countries || j;
+ document.getElementById('s').innerText = 'Loaded '+countries.length+' countries';
+ let sel = document.getElementById('country');
+ sel.innerHTML = countries.map(c=>`<option>${c.country || c.name}</option>`).join('');
+ sel.onchange = draw;
+ draw();
 });
+
+function draw(){
+ let n = document.getElementById('country').value;
+ let list = allData.countries || allData;
+ let cc = list.find(x=> (x.country||x.name)==n);
+ if(!cc) return;
+ let data = cc.data || cc.timeline || [];
+ 
+ // metrics
+ let totalC = data.reduce((s,d)=> s + (d.confirmed||d.cases||0),0) || data[data.length-1]?.confirmed || 0;
+ let totalD = data.reduce((s,d)=> s + (d.deaths||0),0) || data[data.length-1]?.deaths || 0;
+ let totalR = data.reduce((s,d)=> s + (d.recovered||0),0) || data[data.length-1]?.recovered || 0;
+ 
+ // If data is cumulative, use last value
+ if(data.length>0 && data[data.length-1].confirmed > totalC/2){
+   totalC = data[data.length-1].confirmed;
+   totalD = data[data.length-1].deaths;
+   totalR = data[data.length-1].recovered;
+ }
+ 
+ document.getElementById('m1').innerText = totalC.toLocaleString();
+ document.getElementById('m2').innerText = totalD.toLocaleString();
+ document.getElementById('m3').innerText = totalR.toLocaleString();
+ document.getElementById('m4').innerText = data[data.length-1]?.date || '-';
+ 
+ if(chartObj) chartObj.destroy();
+ chartObj = new Chart(document.getElementById('c'), {
+   type: 'bar',
+   data: {
+     labels: data.map(d=>d.date),
+     datasets: [
+       {label: 'Confirmed Cases', data: data.map(d=>d.confirmed||d.cases), backgroundColor: 'rgba(54,162,235,0.6)', borderColor:'blue', borderWidth:1},
+       {label: 'Deaths', data: data.map(d=>d.deaths), backgroundColor:'rgba(255,99,132,0.6)', borderColor:'red', borderWidth:1}
+     ]
+   },
+   options:{responsive:true, plugins:{title:{display:true, text:'COVID Cases - Bar Chart - '+n}}}
+ });
+}
 </script>
 </body>
 </html>
