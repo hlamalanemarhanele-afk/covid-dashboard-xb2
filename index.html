@@ -1,82 +1,95 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>COVID Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>COVID-19 Early Outbreak Dashboard Feb-Mar 2020</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
- body{font-family:Arial; padding:20px; background:#f5f5f5}
- .cards{display:flex; gap:10px; flex-wrap:wrap; margin:15px 0}
- .card{background:white; padding:15px; border-radius:8px; flex:1; min-width:120px; box-shadow:0 2px 5px rgba(0,0,0,0.1)}
- .card h3{margin:0; font-size:14px; color:#666}
- .card p{margin:5px 0 0; font-size:20px; font-weight:bold}
- canvas{background:white; border-radius:8px; padding:10px}
+*{box-sizing:border-box;font-family:Arial}
+body{margin:0;background:#f4f6f9;padding:15px}
+h1{text-align:center;color:#1a73e8;font-size:22px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:20px 0;background:white;padding:15px;border-radius:10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:15px;margin-bottom:20px}
+.card{background:white;padding:15px;border-radius:10px;text-align:center;box-shadow:0 2px 5px rgba(0,0,0,0.1)}
+.card h3{margin:0;font-size:13px;color:#666}
+.card p{font-size:20px;font-weight:bold;margin:8px 0 0}
+.charts{display:grid;grid-template-columns:1fr;gap:20px}
+@media(min-width:900px){.charts{grid-template-columns:1fr 1fr}}
+.chart-box{background:white;padding:15px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,0.1)}
+select,input{padding:8px;border-radius:5px;border:1px solid #ccc}
 </style>
 </head>
 <body>
-<h2>COVID Dashboard - All Charts & Metrics</h2>
-<select id="country"></select> <span id="s"></span>
+<h1>COVID-19 Early Outbreak Dashboard (Feb-Mar 2020)</h1>
 
-<div class="cards">
- <div class="card"><h3>Total Confirmed</h3><p id="m1">-</p></div>
- <div class="card"><h3>Total Deaths</h3><p id="m2">-</p></div>
- <div class="card"><h3>Total Recovered</h3><p id="m3">-</p></div>
- <div class="card"><h3>Latest Date</h3><p id="m4">-</p></div>
+<div class="controls">
+  <label>Country: <select id="countrySelect"></select></label>
+  <label>From: <input type="date" id="fromDate" value="2020-02-01"></label>
+  <label>To: <input type="date" id="toDate" value="2020-03-31"></label>
 </div>
 
-<canvas id="c"></canvas>
+<div class="cards">
+  <div class="card"><h3>Latest Confirmed</h3><p id="confirmed">-</p></div>
+  <div class="card"><h3>Latest Deaths</h3><p id="deaths">-</p></div>
+  <div class="card"><h3>Latest Recoveries</h3><p id="recoveries">-</p></div>
+  <div class="card"><h3>Active Cases</h3><p id="active">-</p></div>
+</div>
+
+<div class="charts">
+  <div class="chart-box"><h3>Cumulative Trend</h3><canvas id="lineChart"></canvas></div>
+  <div class="chart-box"><h3>Daily New Cases</h3><canvas id="barChart"></canvas></div>
+</div>
 
 <script>
-let chartObj = null;
-let allData = null;
-
-fetch('covid-19.json').then(r=>r.json()).then(j=>{
- console.log('Loaded', j);
- allData = j;
- let countries = j.countries || j;
- document.getElementById('s').innerText = 'Loaded '+countries.length+' countries';
- let sel = document.getElementById('country');
- sel.innerHTML = countries.map(c=>`<option>${c.country || c.name}</option>`).join('');
- sel.onchange = draw;
- draw();
+let rawData, lineChart, barChart;
+fetch('covid-19.json').then(r=>r.json()).then(data=>{
+  rawData=data;
+  const countries=Object.keys(data);
+  const sel=document.getElementById('countrySelect');
+  countries.forEach(c=>{let o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+  sel.value=countries.includes('South Africa')?'South Africa':countries[0];
+  sel.addEventListener('change',updateDashboard);
+  document.getElementById('fromDate').addEventListener('change',updateDashboard);
+  document.getElementById('toDate').addEventListener('change',updateDashboard);
+  updateDashboard();
 });
-
-function draw(){
- let n = document.getElementById('country').value;
- let list = allData.countries || allData;
- let cc = list.find(x=> (x.country||x.name)==n);
- if(!cc) return;
- let data = cc.data || cc.timeline || [];
- 
- // metrics
- let totalC = data.reduce((s,d)=> s + (d.confirmed||d.cases||0),0) || data[data.length-1]?.confirmed || 0;
- let totalD = data.reduce((s,d)=> s + (d.deaths||0),0) || data[data.length-1]?.deaths || 0;
- let totalR = data.reduce((s,d)=> s + (d.recovered||0),0) || data[data.length-1]?.recovered || 0;
- 
- // If data is cumulative, use last value
- if(data.length>0 && data[data.length-1].confirmed > totalC/2){
-   totalC = data[data.length-1].confirmed;
-   totalD = data[data.length-1].deaths;
-   totalR = data[data.length-1].recovered;
- }
- 
- document.getElementById('m1').innerText = totalC.toLocaleString();
- document.getElementById('m2').innerText = totalD.toLocaleString();
- document.getElementById('m3').innerText = totalR.toLocaleString();
- document.getElementById('m4').innerText = data[data.length-1]?.date || '-';
- 
- if(chartObj) chartObj.destroy();
- chartObj = new Chart(document.getElementById('c'), {
-   type: 'bar',
-   data: {
-     labels: data.map(d=>d.date),
-     datasets: [
-       {label: 'Confirmed Cases', data: data.map(d=>d.confirmed||d.cases), backgroundColor: 'rgba(54,162,235,0.6)', borderColor:'blue', borderWidth:1},
-       {label: 'Deaths', data: data.map(d=>d.deaths), backgroundColor:'rgba(255,99,132,0.6)', borderColor:'red', borderWidth:1}
-     ]
-   },
-   options:{responsive:true, plugins:{title:{display:true, text:'COVID Cases - Bar Chart - '+n}}}
- });
+function updateDashboard(){
+  const country=document.getElementById('countrySelect').value;
+  const from=document.getElementById('fromDate').value;
+  const to=document.getElementById('toDate').value;
+  let entries=rawData[country];
+  if(!entries) return;
+  let filtered=entries.filter(e=>e.date>=from && e.date<=to);
+  if(filtered.length===0) filtered=entries;
+  const last=filtered[filtered.length-1];
+  document.getElementById('confirmed').textContent=last.confirmed;
+  document.getElementById('deaths').textContent=last.deaths;
+  document.getElementById('recoveries').textContent=last.recovered;
+  const active=last.confirmed - last.deaths - last.recovered;
+  document.getElementById('active').textContent=active;
+  const labels=filtered.map(e=>e.date);
+  const confirmedData=filtered.map(e=>e.confirmed);
+  const deathsData=filtered.map(e=>e.deaths);
+  const recoveredData=filtered.map(e=>e.recovered);
+  const dailyNew=filtered.map((e,i)=> i===0?0:e.confirmed-filtered[i-1].confirmed);
+  console.log('TEST:',country,last,'Active:',active,'DailyNew:',dailyNew.slice(-3));
+  if(lineChart) lineChart.destroy();
+  lineChart=new Chart(document.getElementById('lineChart'),{
+    type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Confirmed',data:confirmedData,borderColor:'blue',fill:false},
+      {label:'Deaths',data:deathsData,borderColor:'red',fill:false},
+      {label:'Recoveries',data:recoveredData,borderColor:'green',fill:false}
+    ]},
+    options:{responsive:true}
+  });
+  if(barChart) barChart.destroy();
+  barChart=new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{labels:labels,datasets:[{label:'Daily New Cases',data:dailyNew,backgroundColor:'orange'}]},
+    options:{responsive:true}
+  });
 }
 </script>
 </body>
